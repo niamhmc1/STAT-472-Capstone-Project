@@ -9,8 +9,6 @@ library(randomForest)
 library(caret)
 library(dplyr)
 
-view(challenge_results)
-view(castaway_details)
 ```
 
 Data Cleaning
@@ -21,9 +19,11 @@ castaway_full <- merge(x = castaways, y = castaway_details)
 castaway_filtered <- castaway_full %>%
   filter(!is.na(personality_type))
 
-castaway_filtered <- castaway_filtered[,c(2,4,5,7,15,17,18,19,31,36,37,38,39,40)]
+castaway_filtered <- castaway_filtered[,c(1,2,4,5,7,15,17,18,19,31,36,37,38,39,40)]
 
 #Deleting seasons 48 and 50 since 49 already didn't include personality types.
+castaway_50 <- castaway_filtered %>%
+  filter(version_season == "US50")
 
 castaway_filtered <- castaway_filtered %>%
   filter(!version_season == "US50")
@@ -41,7 +41,6 @@ castaway_filtered <- castaway_filtered %>%
 castaway_filtered <- castaway_filtered %>%
   arrange(castaway_id)
 
-length(unique(castaway_filtered$version_season))
 
 model <- lm(finalist ~ age + gender + lgbt + personality_type + collar + bipoc, data = castaway_filtered)
 
@@ -64,6 +63,20 @@ counter <- accurate_hopefully > 0.2
 factored <- as.factor(counter)
 leveled <- as.factor(testing_data$finalist)
 IDK <- confusionMatrix(factored, leveled)
+
+#48 Test
+season48 <- predict(rand_for, castaway_48)
+factor48 <- as.factor(season48 > 0.2)
+frame48 <- data.frame(factor48)
+
+tested_48 <- cbind(castaway_48, frame48)
+
+#50 Test
+season50 <- predict(rand_for, castaway_50)
+factor50 <- as.factor(season50 > 0.2)
+frame50 <- data.frame(factor50)
+
+tested_50 <- cbind(castaway_50, frame50)
 ```
 
 ```{r}
