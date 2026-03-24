@@ -1,0 +1,77 @@
+```{r setup, echo = F}
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(survivoR)
+library(forcats)
+library(ggthemes)
+library(randomForest)
+library(caret)
+library(dplyr)
+
+view(challenge_results)
+view(castaway_details)
+```
+
+Data Cleaning
+```{r}
+castaway_full <- merge(x = castaways, y = castaway_details)
+
+#Removing all NAs for personality types from dataset.
+castaway_filtered <- castaway_full %>%
+  filter(!is.na(personality_type))
+
+castaway_filtered <- castaway_filtered[,c(2,4,5,7,15,17,18,19,31,36,37,38,39,40)]
+
+#Deleting seasons 48 and 50 since 49 already didn't include personality types.
+
+castaway_filtered <- castaway_filtered %>%
+  filter(!version_season == "US50")
+
+castaway_48 <- castaway_filtered %>%
+  filter(version_season == "US48")
+
+castaway_filtered <- castaway_filtered %>%
+  filter(!version == "AU")
+
+castaway_filtered <- castaway_filtered %>%
+  filter(!version_season == "US48")
+#Only 855 rows remain after data cleaning. We started with 1378.
+
+castaway_filtered <- castaway_filtered %>%
+  arrange(castaway_id)
+
+length(unique(castaway_filtered$version_season))
+
+model <- lm(finalist ~ age + gender + lgbt + personality_type + collar + bipoc, data = castaway_filtered)
+
+```
+
+
+Prediction Model
+```{r}
+#Setup
+Model_Train <- sample(1:nrow(castaway_filtered), 0.7 * nrow(castaway_filtered))
+training_data <- castaway_filtered[Model_Train,]
+testing_data <- castaway_filtered[-Model_Train,]
+
+#Model
+rand_for <- randomForest(finalist ~ age + gender + lgbt + personality_type + collar + bipoc, data = training_data)
+
+#Testing
+accurate_hopefully <- predict(rand_for, testing_data)
+counter <- accurate_hopefully > 0.2
+factored <- as.factor(counter)
+leveled <- as.factor(testing_data$finalist)
+IDK <- confusionMatrix(factored, leveled)
+```
+
+```{r}
+#graph
+frame <- as.data.frame(as.table(IDK))
+
+ggplot(data = frame, aes(x = Reference, y = Prediction, fill = Freq)) +
+  geom_tile() +
+  scale_fill_distiller(palette = "YlGn") +
+  geom_text(aes(label = Freq))
+```
