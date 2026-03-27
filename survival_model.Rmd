@@ -1,0 +1,85 @@
+---
+title: "survival_model"
+output: html_document
+---
+
+
+# libraries
+```{r}
+library(dplyr)
+library(broom)
+library(survivoR)
+library(survival)
+```
+
+## Cleaning
+
+```{r}
+# processing
+data(challenge_results)
+data(boot_order)
+data(castaways)
+```
+
+```{r}
+challenge_results <- challenge_results |> 
+  filter(!(season == 50) & (version == "US") & !(challenge_type == "Duel")) |>
+  group_by(castaway_id, season) |>
+  summarise(challenges_won = sum(won),
+         individual_immunity_won = sum(won_individual_immunity),
+         tribal_immunity_won = sum(won_tribal_immunity),
+         tribal_reward_won = sum(won_tribal_reward),
+         individual_reward_won = sum(won_individual_reward),
+         .groups = "drop") 
+
+
+boot_order <- boot_order |> 
+  filter(!(season == 50) & (version == "US")) |>
+  select(c(castaway_id, season, day, order)) |>
+  distinct(season, castaway_id, .keep_all = TRUE)
+
+castaways <- castaways |>
+  filter(!(season == 50) & (version == "US")) |>
+  select(c(season, castaway_id, place)) |>
+  distinct(season, castaway_id, .keep_all = TRUE)
+```
+
+```{r}
+## adding back in castaways != Duel removed
+us0195 <- data.frame(castaway_id = "US0195", season = 27, challenges_won = 1,
+                     individual_immunity_won = 0, tribal_immunity_won = 0,
+                     tribal_reward_won = 0, individual_reward_won = 0)
+
+us0107 <- data.frame(castaway_id = "US0107", season = 27, challenges_won = 0,
+                     individual_immunity_won = 0, tribal_immunity_won = 0,
+                     tribal_reward_won = 0, individual_reward_won = 0)
+
+challenge_results <- rbind(challenge_results, us0195)
+challenge_results <- rbind(challenge_results, us0107)
+```
+
+# Now we merge
+
+```{r}
+join1 <- inner_join(challenge_results, boot_order, by = c("castaway_id", "season"))
+# column day is day eliminated, order is order eliminated, opposite to placement
+survival_data <- inner_join(join1, castaways, by = c("castaway_id", "season"))
+
+# making colnames clearer
+colnames(survival_data) <- c("castaway_id", "season", "challenges_won",
+                             "individual_immunity_won", "tribal_immunity_won",
+                             "tribal_reward_won", "individual_reward_one", "day_eliminated",
+                             "order_eliminated", "placement")
+```
+
+## Save season 48 for testing
+
+```{r}
+season48 <- survival_data |>
+  filter(season == 48)
+
+# get rid of season 48 from combined_data
+survival_data <- survival_data |>
+  filter(!(season == 48))
+```
+
