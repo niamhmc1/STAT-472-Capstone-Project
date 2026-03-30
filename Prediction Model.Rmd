@@ -15,66 +15,86 @@ Data Cleaning
 ```{r}
 castaway_full <- merge(x = castaways, y = castaway_details)
 
+castaway_full <- castaway_full %>%
+  mutate(season_area = case_when(season < 10 ~ "initial", season < 20 ~ "early", season < 30 ~"middle", season < 40 ~ "late", TRUE ~ "present"))
+castaway_full <- castaway_full %>%
+  mutate(finalist = ifelse(place <= 3, TRUE, FALSE))
+
+castaway_full <- castaway_full%>%
+  mutate(age_group = case_when(age < 25 ~ "very young", age < 30 ~ "young", age < 35 ~ "average", age < 40 ~ "older", age < 45 ~ "pretty old", age <50 ~ "old", age < 60 ~ "very old", TRUE ~ "elderly"))
+
 #Removing all NAs for personality types from dataset.
 castaway_filtered <- castaway_full %>%
   filter(!is.na(personality_type))
 
-castaway_filtered <- castaway_filtered[,c(1,2,4,5,7,15,17,18,19,31,36,37,38,39,40)]
+castaway_filtered <- castaway_filtered[,c(1,2,4,6,7,15,17,18,19,31,36,37,38,39,40,46,47)]
 
-#Deleting seasons 48 and 50 since 49 already didn't include personality types.
-castaway_50 <- castaway_filtered %>%
-  filter(version_season == "US50")
+#creating test datasets for seasons 48 and 50
 
-castaway_filtered <- castaway_filtered %>%
-  filter(!version_season == "US50")
+castaway_50 <- castaway_full %>%
+  filter(season == "50")
+castaway_50 <- rbind(castaway_full[c(550,1231,1138),], castaway_50)
+castaway_50 <- castaway_50 %>%
+  slice(-24,-25)
+castaway_50$age <- c(47,45,31,35,39,53,27,54,39,55,51,28,30,34,45,32,31,31,54,43,31,41,26,34)
+castaway_50[3,38] <- "ESTJ"
+castaway_50[23,38] <- "ENTP"
+castaway_50[c(3,23),40] <- "White collar"
+castaway_50[c(1,2),46] <- "present"
+
+castaway_50 <- castaway_50%>%
+  mutate(age_group = case_when(age < 25 ~ "very young", age < 30 ~ "young", age < 35 ~ "average", age < 40 ~ "older", age < 45 ~ "pretty old", age <50 ~ "old", age < 60 ~ "very old", TRUE ~ "elderly"))
 
 castaway_48 <- castaway_filtered %>%
-  filter(version_season == "US48")
+  filter(season == "48")
+
+#Deleting seasons 48-50 since 49 already didn't include personality types. Only keeping US for same reason
+
+castaway_filtered <- castaway_filtered %>%
+  filter(!season == "50")
 
 castaway_filtered <- castaway_filtered %>%
   filter(!version == "AU")
 
 castaway_filtered <- castaway_filtered %>%
-  filter(!version_season == "US48")
-#Only 855 rows remain after data cleaning. We started with 1378.
+  filter(!season == "48")
+#Only 833 rows remain after data cleaning. We started with 1378.
 
 castaway_filtered <- castaway_filtered %>%
   arrange(castaway_id)
-
-
-model <- lm(finalist ~ age + gender + lgbt + personality_type + collar + bipoc, data = castaway_filtered)
-
 ```
 
 
 Prediction Model
 ```{r}
+set.seed(472)
 #Setup
 Model_Train <- sample(1:nrow(castaway_filtered), 0.7 * nrow(castaway_filtered))
 training_data <- castaway_filtered[Model_Train,]
 testing_data <- castaway_filtered[-Model_Train,]
 
 #Model
-rand_for <- randomForest(finalist ~ age + gender + lgbt + personality_type + collar + bipoc, data = training_data)
+rand_for <- randomForest(finalist ~ age_group + gender + lgbt + personality_type + collar + bipoc + season_area, data = training_data)
 
 #Testing
 accurate_hopefully <- predict(rand_for, testing_data)
-counter <- accurate_hopefully > 0.2
+counter <- accurate_hopefully > 0.27
 factored <- as.factor(counter)
 leveled <- as.factor(testing_data$finalist)
 IDK <- confusionMatrix(factored, leveled)
 
 #48 Test
 season48 <- predict(rand_for, castaway_48)
-factor48 <- as.factor(season48 > 0.2)
+factor48 <- as.factor(season48 > 0.27)
 frame48 <- data.frame(factor48)
 
 tested_48 <- cbind(castaway_48, frame48)
 
 #50 Test
 season50 <- predict(rand_for, castaway_50)
-factor50 <- as.factor(season50 > 0.2)
+factor50 <- as.factor(season50 > 0.27)
 frame50 <- data.frame(factor50)
+
 
 tested_50 <- cbind(castaway_50, frame50)
 ```
@@ -83,8 +103,14 @@ tested_50 <- cbind(castaway_50, frame50)
 #graph
 frame <- as.data.frame(as.table(IDK))
 
-ggplot(data = frame, aes(x = Reference, y = Prediction, fill = Freq)) +
+ggplot(data = frame, aes(x = Prediction, y = Reference, fill = Freq,)) +
   geom_tile() +
   scale_fill_distiller(palette = "YlGn") +
-  geom_text(aes(label = Freq))
+  scale_x_discrete(limits = c("TRUE", "FALSE")) +
+  scale_y_discrete(limits = c("FALSE", "TRUE")) +
+  geom_text(aes(label = Freq),colour = "skyblue1") +
+  theme_economist()
+
+ggsave("confusion.jpg")
+IDK
 ```
