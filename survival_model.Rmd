@@ -3,13 +3,15 @@ title: "survival_model"
 output: html_document
 ---
 
-
 # libraries
+
 ```{r}
 library(dplyr)
 library(broom)
 library(survivoR)
 library(survival)
+library(knitr)
+library(kableExtra)
 ```
 
 ## Cleaning
@@ -83,3 +85,18 @@ survival_data <- survival_data |>
   filter(!(season == 48))
 ```
 
+## Cox Regression
+
+```{r}
+survivor_cox <- coxph(Surv(day_eliminated) ~ challenges_won + tribal_immunity_won + individual_immunity_won + tribal_reward_won + individual_reward_one, data = survival_data)
+
+zph <- cox.zph(survivor_cox)
+data.frame(zph$table) |>
+  mutate(predictors = c("Challenges Won", "Tribal Immunity Won", "Individual Immunity Won", "Tribal Reward Won", "Individual Reward Won", "Global"), .before = chisq, p = scales::pvalue(p)) |> 
+  kable(
+    digits=c(3,3,3),
+    row.names = F,
+    col.names = c("Predictors", "Chi Square", "df", "p value")
+  )
+#save_kable(kable_zph, file = "cox_assumptions_table.png")
+```
