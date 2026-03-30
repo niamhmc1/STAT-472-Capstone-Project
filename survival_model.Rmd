@@ -12,6 +12,7 @@ library(survivoR)
 library(survival)
 library(knitr)
 library(kableExtra)
+library(ggsurvfit)
 ```
 
 ## Cleaning
@@ -42,8 +43,8 @@ boot_order <- boot_order |>
 
 castaways <- castaways |>
   filter(!(season == 50) & (version == "US")) |>
-  select(c(season, castaway_id, place)) |>
-  distinct(season, castaway_id, .keep_all = TRUE)
+  select(c(season, castaway_id, place, castaway)) |>
+  distinct(season, castaway_id, castaway, .keep_all = TRUE)
 ```
 
 ```{r}
@@ -71,7 +72,14 @@ survival_data <- inner_join(join1, castaways, by = c("castaway_id", "season"))
 colnames(survival_data) <- c("castaway_id", "season", "challenges_won",
                              "individual_immunity_won", "tribal_immunity_won",
                              "tribal_reward_won", "individual_reward_one", "day_eliminated",
-                             "order_eliminated", "placement")
+                             "order_eliminated", "placement", "castaway")
+```
+
+## status variable
+
+```{r}
+survival_data <- survival_data |>
+  mutate(status = if_else(placement == 1, FALSE, TRUE))
 ```
 
 ## Save season 48 for testing
@@ -99,4 +107,19 @@ data.frame(zph$table) |>
     col.names = c("Predictors", "Chi Square", "df", "p value")
   )
 #save_kable(kable_zph, file = "cox_assumptions_table.png")
+```
+
+
+
+
+
+# Survival 
+
+```{r}
+str1 <- survfit(Surv(day_eliminated, status) ~ 1, data = survival_data)
+tidy(str1)
+```
+
+```{r}
+survfit2(Surv(day_eliminated, status) ~ 1, data = survival_data) |> ggsurvfit()
 ```
