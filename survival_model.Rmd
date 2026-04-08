@@ -96,11 +96,11 @@ survival_data <- survival_data |>
 ## Cox Regression
 
 ```{r}
-survivor_cox <- coxph(Surv(day_eliminated) ~ challenges_won + tribal_immunity_won + individual_immunity_won + tribal_reward_won + individual_reward_one, data = survival_data)
+survivor_cox <- coxph(Surv(day_eliminated, status) ~ tribal_immunity_won + individual_immunity_won + tribal_reward_won + individual_reward_one, data = survival_data)
 
 zph <- cox.zph(survivor_cox)
 data.frame(zph$table) |>
-  mutate(predictors = c("Challenges Won", "Tribal Immunity Won", "Individual Immunity Won", "Tribal Reward Won", "Individual Reward Won", "Global"), .before = chisq, p = scales::pvalue(p)) |> 
+  mutate(predictors = c("Tribal Immunity Won", "Individual Immunity Won", "Tribal Reward Won", "Individual Reward Won", "Global"), .before = chisq, p = scales::pvalue(p)) |> 
   kable(
     digits=c(3,3,3),
     row.names = F,
@@ -109,11 +109,43 @@ data.frame(zph$table) |>
 #save_kable(kable_zph, file = "cox_assumptions_table.png")
 ```
 
+```{r}
+#Median survival curve
+avg_survival <- survfit(survivor_cox)
+plot(avg_survival)
 
+#Survival, No challenges won
+newdata <- data.frame(
+  tribal_immunity_won = 0,
+  individual_immunity_won = 0,
+  tribal_reward_won = 0,
+  individual_reward_one = 0
+)
+no_chal_survival <- survfit(survivor_cox, newdata)
+plot(no_chal_survival)
 
+```
 
+```{r}
+surv_cox_time <- coxph(Surv(day_eliminated, status) ~ challenges_won + tt(challenges_won), data = survival_data, tt = function(x,t,...) x*t)
 
-# Survival 
+summary(surv_cox_time)
+
+```
+
+```{r}
+
+survival_data_rates <- survival_data |>
+  group_by(season) |>
+  mutate(chal_rate = challenges_won / day_eliminated)
+
+surv_rate <- coxph(Surv(day_eliminated, status) ~ chal_rate, data = survival_data_rates)
+
+plot(cox.zph(surv_rate))
+
+```
+
+# Survival
 
 ```{r}
 str1 <- survfit(Surv(day_eliminated, status) ~ 1, data = survival_data)
