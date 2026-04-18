@@ -28,6 +28,20 @@ castaway_filtered <- castaway_full %>%
   filter(!is.na(personality_type))
 
 castaway_filtered <- castaway_filtered[,c(1,2,4,6,7,15,17,18,19,31,36,37,38,39,40,46,47)]
+castaway_filtered <- castaway_filtered %>%
+  mutate(collar = case_when(grepl("Student", occupation) ~ "Student", TRUE ~ collar))
+
+castaway_filtered <- castaway_filtered %>%
+  mutate(Energy = case_when(grepl("I", personality_type) ~ "Introverted", TRUE ~ "Extroverted"))
+
+castaway_filtered <- castaway_filtered %>%
+  mutate(Mind = case_when(grepl("N", personality_type) ~ "Intuitive", TRUE ~ "Observing"))
+
+castaway_filtered <- castaway_filtered %>%
+  mutate(Nature = case_when(grepl("T", personality_type) ~ "Thinking", TRUE ~ "Feeling"))
+
+castaway_filtered <- castaway_filtered %>%
+  mutate(Tactics = case_when(grepl("J", personality_type) ~ "Judging", TRUE ~ "Prospecting"))
 
 #creating test datasets for seasons 48 and 50
 
@@ -45,10 +59,24 @@ castaway_50[c(1,2),46] <- "present"
 castaway_50 <- castaway_50%>%
   mutate(age_group = case_when(age < 25 ~ "very young", age < 30 ~ "young", age < 35 ~ "average", age < 40 ~ "older", age < 45 ~ "pretty old", age <50 ~ "old", age < 60 ~ "very old", TRUE ~ "elderly"))
 
-castaway_48 <- castaway_filtered %>%
-  filter(season == "48")
+castaway_50 <- castaway_50[,c(1,2,4,6,7,15,17,18,19,31,36,37,38,39,40,46,47)]
+castaway_filtered <- castaway_filtered %>%
+  mutate(collar = case_when(grepl("Student", occupation) ~ "Student", TRUE ~ collar))
 
-#Deleting seasons 48-50 since 49 already didn't include personality types. Only keeping US for same reason
+castaway_50 <- castaway_50 %>%
+  mutate(Energy = case_when(grepl("I", personality_type) ~ "Introverted", TRUE ~ "Extroverted"))
+
+castaway_50 <- castaway_50 %>%
+  mutate(Mind = case_when(grepl("N", personality_type) ~ "Intuitive", TRUE ~ "Observing"))
+
+castaway_50 <- castaway_50 %>%
+  mutate(Nature = case_when(grepl("T", personality_type) ~ "Thinking", TRUE ~ "Feeling"))
+
+castaway_50 <- castaway_50 %>%
+  mutate(Tactics = case_when(grepl("J", personality_type) ~ "Judging", TRUE ~ "Prospecting"))
+
+
+#Deleting seasons 49-50 since 49 already didn't include personality types. Only keeping US for same reason
 
 castaway_filtered <- castaway_filtered %>%
   filter(!season == "50")
@@ -56,47 +84,59 @@ castaway_filtered <- castaway_filtered %>%
 castaway_filtered <- castaway_filtered %>%
   filter(!version == "AU")
 
-castaway_filtered <- castaway_filtered %>%
-  filter(!season == "48")
-#Only 833 rows remain after data cleaning. We started with 1378.
+#Only 851 rows remain after data cleaning. We started with 1378.
 
 castaway_filtered <- castaway_filtered %>%
   arrange(castaway_id)
+
+
 ```
 
 
 Prediction Model
 ```{r}
+# Train/test split
 set.seed(472)
-#Setup
 Model_Train <- sample(1:nrow(castaway_filtered), 0.7 * nrow(castaway_filtered))
-training_data <- castaway_filtered[Model_Train,]
 testing_data <- castaway_filtered[-Model_Train,]
 
-#Model
-rand_for <- randomForest(finalist ~ age_group + gender + lgbt + personality_type + collar + bipoc + season_area, data = training_data)
+# Make outcome a factor
+training_data$finalist <- as.factor(training_data$finalist)
+testing_data$finalist <- as.factor(testing_data$finalist)
 
-#Testing
-accurate_hopefully <- predict(rand_for, testing_data)
-counter <- accurate_hopefully > 0.27
-factored <- as.factor(counter)
-leveled <- as.factor(testing_data$finalist)
-IDK <- confusionMatrix(factored, leveled)
+# Seeds
+seeds <- c(2026, 411, 235, 332, 421)
 
-#48 Test
-season48 <- predict(rand_for, castaway_48)
-factor48 <- as.factor(season48 > 0.27)
-frame48 <- data.frame(factor48)
+# Train models
+models <- lapply(seeds, function(s) {
+  set.seed(s)
+  Model_Train <- sample(1:nrow(castaway_filtered), 0.7 * nrow(castaway_filtered))
+  training_data <- castaway_filtered[Model_Train,]
+  training_data$finalist <- as.factor(training_data$finalist)
+  randomForest(
+    finalist ~ Energy + Mind + Nature + age_group + season_area + 
+      Tactics + gender + lgbt + collar + bipoc,
+    data = training_data
+  )
+})
 
-tested_48 <- cbind(castaway_48, frame48)
+# Get binary predictions per model
+pred_matrix <- sapply(models, function(model) {
+  probs <- predict(model, testing_data, type = "prob")[, 2]
+  probs > 0.25
+})
 
-#50 Test
-season50 <- predict(rand_for, castaway_50)
-factor50 <- as.factor(season50 > 0.27)
-frame50 <- data.frame(factor50)
+# Majority vote
+final_preds <- apply(pred_matrix, 1, function(x) {
+  mean(x) > 0.5
+})
+
+# Match factor levels
+factored <- factor(final_preds, levels = levels(testing_data$finalist))
+# Confusion matrix
+IDK <- confusionMatrix(factored, testing_data$finalist)
 
 
-tested_50 <- cbind(castaway_50, frame50)
 ```
 
 ```{r}
